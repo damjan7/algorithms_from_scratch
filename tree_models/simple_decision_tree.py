@@ -20,11 +20,32 @@ class SimpleDecisionTreeRegressor:
     def predict(self, X):
         """
         need to traverse the tree
-        the tree is a nested tuple of (split feature, split index, left subtree, right subtree)
+        the tree is a nested tuple of (split feature, split value, left subtree, right subtree)
         where left and right subtree contain the same structure until a leaf node is reached
         in that case the left subtree and right subtree are None 
         """
-        pass
+        preds = []
+        for i in range(X.shape[0]):
+            # find leaf node
+            tree_depth = 0
+            cur_tree = self.tree
+            while True:
+                cur_split_feature = cur_tree[0]
+                cur_split_value = cur_tree[1]
+                if X[i, cur_split_feature] <= cur_split_value:
+                    if cur_tree[2] is not None:
+                        cur_tree = cur_tree[2]
+                    else:
+                        preds.append(cur_tree[4])
+                        break
+                else: # go to the right subtree else
+                    if cur_tree[3] is not None:
+                        cur_tree = cur_tree[3]
+                    else:
+                        preds.append(cur_tree[5])
+                        break
+        return preds
+    
     
     def _build_tree(self, X, y, depth=0):
         """
@@ -40,14 +61,14 @@ class SimpleDecisionTreeRegressor:
             
         """
         
-        if depth == 5 or X.shape[0]==1:
+        if depth == self.max_depth or X.shape[0]==1:
             return
 
         # find best two regions and split data accordingly
-        split_feature, split_index = self._find_best_split(X, y)
+        split_feature, split_value = self._find_best_split(X, y)
 
-        left_bool = X[:, split_feature] <= X[split_index, split_feature]
-        right_bool = X[:, split_feature] > X[split_index, split_feature]
+        left_bool = X[:, split_feature] <= split_value
+        right_bool = X[:, split_feature] > split_value
 
         X_left, y_left = X[left_bool, :], y[left_bool]
         X_right, y_right = X[right_bool, :], y[right_bool]
@@ -56,7 +77,11 @@ class SimpleDecisionTreeRegressor:
         left_subtree = self._build_tree(X_left, y_left, depth=depth+1)
         right_subtree = self._build_tree(X_right, y_right, depth=depth+1)
 
-        return (split_feature, split_index, left_subtree, right_subtree)
+        left_pred = np.mean(y_left)
+        right_pred = np.mean(y_right)
+        avg_pred = np.mean(np.concatenate([y_left, y_right]))
+
+        return (split_feature, split_value, left_subtree, right_subtree, left_pred, right_pred, avg_pred)
 
 
     def _find_best_split(self, X, y):
@@ -76,8 +101,9 @@ class SimpleDecisionTreeRegressor:
                 if current_gain < information_gain:
                     information_gain = current_gain
                     best_split_feature, best_split_index = feature, split_index
+                    best_split_value = X[best_split_index, best_split_feature]
         
-        return best_split_feature, best_split_index
+        return best_split_feature, best_split_value
 
     
     def _information_gain(self, X, y, feature, split_index):
