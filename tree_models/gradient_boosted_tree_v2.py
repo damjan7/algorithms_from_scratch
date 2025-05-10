@@ -9,7 +9,7 @@ from sklearn.tree import DecisionTreeRegressor
 
 # sklearn docs for GB Regression
 # subsample: float, default=1.0
-# The fraction of samples to be used for fitting the individual base learners. 
+# The fraction of samples to be used for fitting the i ndividual base learners. 
 # If smaller than 1.0 this results in Stochastic Gradient Boosting. subsample interacts with 
 # the parameter n_estimators. Choosing subsample < 1.0 leads to a reduction of variance and an increase in bias.
 
@@ -22,6 +22,7 @@ class GradientBoostedTree():
     def __init__(self, num_learners=100, learning_rate=0.1, max_depth=3):
         self.trees = {}  # store trees 1,..,M inside here
         self.tree_weights = {}  # store the tree weights
+        self.tree_insample_preds = {}
         self.num_learners = num_learners
         self.learning_rate = learning_rate
         self.max_depth = max_depth
@@ -38,29 +39,36 @@ class GradientBoostedTree():
             if i == 0:
                 self.trees[i] = self._fit_base_learner(X, y)
                 self.tree_weights[i] = 1
+                self.tree_insample_preds[i] = self._predict_single_base_learner(X, mod=self.trees[i])
             else:
                 # calc 'new' y --> for mse = y - fm()
                 residuals = self._calc_residuals(X, y)
                 self.trees[i] = self._fit_base_learner(X, residuals)
-                pred_i = self.trees[i].predict(X)
+                self.tree_insample_preds[i] = self._predict_single_base_learner(X, mod=self.trees[i])
+                pred_i = self.tree_insample_preds[i]
                 self.tree_weights[i] = self._calc_tree_weight(residuals=residuals, h=pred_i) * self.learning_rate
-                if i%25 == 0:
+                if i % 25 == 0:
                     print(f"mse iter {i}, train set: ", mean_squared_error(self.predict(X), y))
-                    print(f"mse iter {i}, test set: ", mean_squared_error(self.predict(x_val), y_val ) )
+                    print(f"mse iter {i}, test set: ", mean_squared_error(self.predict(x_val), y_val))
 
                 
-    
-    
+
     def predict(self, X):
+        preds = {}
+        for i, tree in enumerate(self.trees.values()):
+            preds[i] = tree.predict(X)
+        preds = pd.DataFrame(preds)
+        preds_weighted = preds * self.tree_weights.values()
+        preds_final = preds_weighted.sum(axis=1) # or mean
+        return preds_final
+    
+    def _predict_insample(self):
         """
         iterate thruogh all trees with corresponding weights and predict
         """
-        preds = []
-        for tree in self.trees.values():
-            preds.append(tree.predict(X))
-        preds_weighted = [w*pred for w, pred in zip(self.tree_weights.values(), preds)]  # debug this, as preds for each tree is a N x 1 vector
-        preds_final = np.sum(preds_weighted, axis=0)
-        #preds_final = preds_final / np.sum(list(self.tree_weights.values()))
+        preds = pd.DataFrame(self.tree_insample_preds)
+        preds_weighted = preds * self.tree_weights.values()
+        preds_final = preds_weighted.sum(axis=1) # or mean
         return preds_final
 
 
@@ -85,19 +93,18 @@ class GradientBoostedTree():
         mod.fit(X, y)
         return mod
     
-    
+    def _predict_single_base_learner(self, X, mod):
+            return mod.predict(X)
 
     def _calc_residuals(self, X, y):
         """
         can access current num of estimators via self.trees.keys()
         """
-        preds = []
-        for tree in self.trees.values():
-            preds.append(tree.predict(X))
-        # preds should be a list of length 'm' [self.tree.keys()] containing elems of length X.shape[0]
-        preds_weighted = [w*pred for w, pred in zip(self.tree_weights.values(), preds)]  # debug this, as preds for each tree is a N x 1 vector
-        preds_final = np.sum(preds_weighted, axis=0)
+        preds = pd.DataFrame(self.tree_insample_preds)
+        preds_weighted = preds * self.tree_weights.values()
+        preds_final = preds_weighted.sum(axis=1)
         #preds_final = preds_final / np.sum(list(self.tree_weights.values())
-        
+
+        # NOT!!! -1* residuals even though that would make more sense to me
         return 1*(y - preds_final)
 

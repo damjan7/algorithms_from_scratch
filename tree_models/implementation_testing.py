@@ -16,12 +16,29 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffl
 
 
 ########################
+from sklearn.tree import DecisionTreeRegressor
+# single decision tree
+from simple_decision_tree import SimpleDecisionTreeRegressor
+mod = DecisionTreeRegressor(max_depth=3,
+                                    min_samples_split=2, 
+                                    min_samples_leaf=1, 
+                                    min_weight_fraction_leaf=0.0)
+mod.fit(X_train, y_train)
+preds_mod = mod.predict(X_test)
+print("mse single dec tree, max_depth 3: ", mean_squared_error(preds_mod, y_test))
+
 # TEST GRADIENT BOSTED TREES
 from gradient_boosted_tree import GradientBoostedTree
 my_gbt = GradientBoostedTree()
-my_gbt.fit(X_train, y_train)
+my_gbt.fit(X_train, y_train, x_val=X_test, y_val=y_test)
 preds_my_gbt = my_gbt.predict(X_test)
 print("mse my gbt: ", mean_squared_error(preds_my_gbt, y_test))
+
+from gradient_boosted_tree_v2 import GradientBoostedTree
+my_gbt_v2 = GradientBoostedTree()
+my_gbt_v2.fit(X_train, y_train, x_val=X_test, y_val=y_test)
+preds_my_gbt_v2 = my_gbt_v2.predict(X_test)
+print("mse my gbt v2: ", mean_squared_error(preds_my_gbt_v2, y_test))
 
 from sklearn.ensemble import GradientBoostingRegressor
 sk_gbt = GradientBoostingRegressor()
